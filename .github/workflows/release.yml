@@ -3,12 +3,20 @@ name: Release
 # Pushing a tag like v1.0.1 gets the add-on signed by Mozilla (unlisted channel) and publishes the
 # signed .xpi as a GitHub release. The tag must match the version in manifest.json and package.json,
 # and Mozilla only accepts each version once.
-# "Run workflow" does a dry run: lint, tests and an unsigned build, published nowhere.
+# "Run workflow", and pull requests that touch the release build, do a dry run: lint, tests and an unsigned build, published nowhere.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  # dry run on pull requests that change how releases are built, so they're caught before a tag
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "web-ext-config.mjs"
+      - "manifest.json"
+      - "package.json"
+      - "package-lock.json"
 
 permissions: {}
 
