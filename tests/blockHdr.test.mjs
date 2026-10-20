@@ -1,31 +1,8 @@
-// Runs the real blockHdr.js in a sandbox with a fake page and Firefox's content-script helpers
-// (wrappedJSObject, exportFunction, cloneInto), then checks what the patched page APIs answer.
+// Checks what the patched page APIs answer, with the real blockHdr.js loaded by harness.mjs.
 // Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
-
-const SCRIPT = readFileSync(new URL('../blockHdr.js', import.meta.url), 'utf8');
-
-function loadExtension() {
-  const page = {
-    Promise,
-    MediaSource: { isTypeSupported: () => true },
-    HTMLMediaElement: { prototype: { canPlayType: () => 'probably' } },
-    MediaCapabilities: {
-      prototype: { decodingInfo: () => Promise.resolve({ supported: true, smooth: true, powerEfficient: true }) },
-    },
-    matchMedia: query => ({ media: query, matches: query !== 'not all' }),
-  };
-  const sandbox = {
-    window: { wrappedJSObject: page },
-    exportFunction: (fn, target, { defineAs }) => { target[defineAs] = fn; },
-    cloneInto: obj => structuredClone(obj),
-  };
-  vm.runInNewContext(SCRIPT, sandbox);
-  return page;
-}
+import { loadExtension } from './harness.mjs';
 
 const page = loadExtension();
 const mse = type => page.MediaSource.isTypeSupported(type);
