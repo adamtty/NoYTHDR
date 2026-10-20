@@ -1,8 +1,8 @@
-// Checks what the patched page APIs answer, with the real blockHdr.js loaded by harness.mjs.
+// Checks what the patched page APIs answer, with the real blockHdr.js loaded by harness.js.
 // Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadExtension } from './harness.mjs';
+import { loadExtension } from './harness.js';
 
 const page = loadExtension();
 const mse = type => page.MediaSource.isTypeSupported(type);

@@ -1,9 +1,9 @@
 // Property-based fuzzing with fast-check: thousands of generated inputs per property, against the
-// real blockHdr.js (loaded by harness.mjs). Run with: npm test
+// real blockHdr.js (loaded by harness.js). Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
-import { loadExtension } from './harness.mjs';
+import { loadExtension } from './harness.js';
 
 const page = loadExtension();
 const mse = type => page.MediaSource.isTypeSupported(type);
