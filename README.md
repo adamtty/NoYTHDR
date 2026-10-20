@@ -32,11 +32,21 @@ The patches are applied to the page's own globals through Firefox's
 `wrappedJSObject` at `document_start`, so they're in place before the player
 script runs. No inline script injection, so YouTube's CSP is a non-issue.
 
-## Permanent install
+## Install
+
+Download the latest `NoYTHDR-….xpi` from
+[Releases](https://github.com/adamtty/NoYTHDR/releases/latest) and open it with Firefox (or drag it
+onto a Firefox window), then click **Add**. Releases are signed by Mozilla, so the add-on stays
+installed through restarts and Firefox updates. To update, install a newer release's `.xpi` over it.
+
+To check a download: `shasum -a 256 -c SHA256SUMS`, and
+`gh attestation verify NoYTHDR-….xpi --repo adamtty/NoYTHDR`, which proves it was built by this
+repository's release workflow from the tagged commit.
+
+## Sign it yourself
 
 Firefox removes add-ons loaded through `about:debugging` when it restarts. To
-install NoYTHDR once and keep it through Firefox updates, first get an unlisted
-package signed by Mozilla:
+install your own build permanently, get an unlisted package signed by Mozilla:
 
 1. Install [Node.js 22 or newer](https://nodejs.org/) and run `npm install` in
    this directory.
@@ -64,6 +74,16 @@ must remain `noythdr@adam` so Firefox recognises it as an update.
 
 For development only, use `about:debugging` → **This Firefox** → **Load
 Temporary Add-on**, then choose `manifest.json`.
+
+## Releasing
+
+Bump `version` in both `manifest.json` and `package.json`, then push a matching tag (`v1.0.1`). The
+release workflow lints and tests, gets the add-on signed by Mozilla on the unlisted channel, checks
+the signed `.xpi` contains only the extension's files, and publishes it with `SHA256SUMS` and a
+build-provenance attestation. Mozilla accepts each version only once.
+
+The AMO API key (`AMO_JWT_ISSUER`, `AMO_JWT_SECRET`) lives in the repository's `release` environment,
+which only `v*` tags can use. **Run workflow** on the Release workflow does a dry run without signing.
 
 ## Development
 

@@ -1,0 +1,152 @@
+name: Release
+
+# Pushing a tag like v1.0.1 gets the add-on signed by Mozilla (unlisted channel) and publishes the
+# signed .xpi as a GitHub release. The tag must match the version in manifest.json and package.json,
+# and Mozilla only accepts each version once.
+# "Run workflow" does a dry run: lint, tests and an unsigned build, published nowhere.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    name: Sign with Mozilla
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # the AMO API key lives in "release", which only v* tags can use; dry runs get none
+    environment: ${{ github.event_name == 'push' && 'release' || 'release-dry-run' }}
+    permissions:
+      contents: read
+    steps:
+      # audit, not block: signing talks to Mozilla's API and then downloads the signed file from its CDN
+      - name: Harden runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          # no cache in a release build: a cache written by another run could poison what gets signed
+          package-manager-cache: false
+
+      - name: Tag matches the add-on version
+        if: github.event_name == 'push'
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          m=$(node -p 'require("./manifest.json").version')
+          p=$(node -p 'require("./package.json").version')
+          if [ "$tag" != "$m" ] || [ "$tag" != "$p" ]; then
+            echo "::error::tag v$tag doesn't match manifest.json ($m) and package.json ($p)"
+            exit 1
+          fi
+
+      - name: Install (from the lockfile, no install scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Lint and test
+        run: |
+          npm run lint
+          npm test
+
+      - name: Build (dry run)
+        if: github.event_name != 'push'
+        run: npm run build
+
+      - name: Sign with Mozilla (unlisted)
+        if: github.event_name == 'push'
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::error::Add AMO_JWT_ISSUER and AMO_JWT_SECRET to the repository's release environment"
+            exit 1
+          fi
+          # credentials via environment, not command-line arguments
+          npx --no-install web-ext sign --channel=unlisted --approval-timeout=1800000 \
+            --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET"
+
+      - name: Check the package
+        run: |
+          shopt -s nullglob
+          files=(web-ext-artifacts/*.xpi web-ext-artifacts/*.zip)
+          [ ${#files[@]} -eq 1 ] || { echo "::error::expected one package, found: ${files[*]}"; exit 1; }
+          contents=$(unzip -Z1 "${files[0]}" | grep -v '^META-INF/' | LC_ALL=C sort | tr '\n' ' ')
+          echo "packaged: $contents"
+          [ "$contents" = "LICENSE blockHdr.js icon.svg manifest.json " ] || { echo "::error::unexpected files in the package"; exit 1; }
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            unzip -Z1 "${files[0]}" | grep -q '^META-INF/mozilla.rsa$' || { echo "::error::the .xpi isn't signed by Mozilla"; exit 1; }
+            mkdir dist
+            cp "${files[0]}" "dist/NoYTHDR-${GITHUB_REF_NAME}.xpi"
+            (cd dist && sha256sum -- *.xpi > SHA256SUMS && cat SHA256SUMS)
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: github.event_name == 'push'
+        with:
+          name: release
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: sign
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release
+      id-token: write # sign the build-provenance attestation
+      attestations: write # store it
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            uploads.github.com:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+            results-receiver.actions.githubusercontent.com:443
+            productionresultssa0.blob.core.windows.net:443
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: dist
+
+      - name: Build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.xpi
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cd dist
+          xpi=$(ls -- *.xpi)
+          cat > notes.md <<EOF
+          **Install:** download \`$xpi\` and open it with Firefox (or drag it onto a Firefox window), then click **Add**. It's signed by Mozilla, so it installs permanently and survives restarts. To update later, install the newer release's \`.xpi\` over it.
+
+          **Verify:** \`sha256sum -c SHA256SUMS\` (\`shasum -a 256 -c SHA256SUMS\` on macOS), and \`gh attestation verify $xpi --repo $REPO\` to check it was built by this repository's release workflow.
+          EOF
+          gh release create "$GITHUB_REF_NAME" --repo "$REPO" --verify-tag --title "NoYTHDR ${GITHUB_REF_NAME}" \
+            --notes-file notes.md --generate-notes -- "$xpi" SHA256SUMS
