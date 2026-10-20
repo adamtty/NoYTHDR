@@ -75,17 +75,17 @@ jobs:
 
       - name: Sign with Mozilla (unlisted)
         if: github.event_name == 'push'
+        # web-ext reads WEB_EXT_API_KEY/WEB_EXT_API_SECRET itself, so the key never appears in a
+        # command line, where other processes on the runner could see it
         env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         run: |
-          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+          if [ -z "$WEB_EXT_API_KEY" ] || [ -z "$WEB_EXT_API_SECRET" ]; then
             echo "::error::Add AMO_JWT_ISSUER and AMO_JWT_SECRET to the repository's release environment"
             exit 1
           fi
-          # credentials via environment, not command-line arguments
-          npx --no-install web-ext sign --channel=unlisted --approval-timeout=1800000 \
-            --api-key="$AMO_JWT_ISSUER" --api-secret="$AMO_JWT_SECRET"
+          npx --no-install web-ext sign --channel=unlisted --approval-timeout=1800000
 
       - name: Check the package
         run: |
