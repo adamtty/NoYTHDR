@@ -56,12 +56,14 @@ install your own build permanently, get an unlisted package signed by Mozilla:
 3. Set the credentials for the current terminal and submit the add-on:
 
    ```sh
-   export AMO_JWT_ISSUER='user:123456:789'
-   export AMO_JWT_SECRET='your-secret'
+   export WEB_EXT_API_KEY='user:123456:789'
+   export WEB_EXT_API_SECRET='your-secret'
    npm run sign
    ```
 
-   Keep the secret out of this repository and shell-history files.
+   web-ext reads these itself, so the key never appears on a command line. Keep the secret out of
+   this repository and shell-history files (a leading space keeps a command out of zsh history when
+   `HIST_IGNORE_SPACE` is set).
 4. When Mozilla approves the submission, `web-ext-artifacts/` will contain a
    signed `.xpi`. In Firefox, open `about:addons`, click the gear button, choose
    **Install Add-on From File**, and select that `.xpi`.
@@ -82,7 +84,7 @@ release workflow lints and tests, gets the add-on signed by Mozilla on the unlis
 the signed `.xpi` contains only the extension's files, and publishes it with `SHA256SUMS` and a
 build-provenance attestation. Mozilla accepts each version only once.
 
-The AMO API key (`AMO_JWT_ISSUER`, `AMO_JWT_SECRET`) lives in the repository's `release` environment,
+The AMO API key (secrets `AMO_JWT_ISSUER`, `AMO_JWT_SECRET`, passed to web-ext as `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET`) lives in the repository's `release` environment,
 which only `v*` tags can use. **Run workflow** on the Release workflow does a dry run without signing.
 
 ## Development
