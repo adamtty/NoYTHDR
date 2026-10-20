@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "NoYTHDR",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Stops YouTube from playing HDR video. YouTube serves the tone-mapped SDR version of the same stream instead.",
   "icons": {
     "48": "icon.svg",
