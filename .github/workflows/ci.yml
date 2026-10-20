@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # renovate: datasource=pypi depName=zizmor
+  ZIZMOR_VERSION: 1.31.1
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            registry.npmjs.org:443
+            pypi.org:443
+            files.pythonhosted.org:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # --ignore-scripts: no dependency gets to run code at install time
+      - name: Install (from the lockfile)
+        run: npm ci --ignore-scripts
+
+      - name: web-ext lint (warnings are errors)
+        run: npm run lint
+
+      - name: zizmor (workflow security)
+        run: pipx run "zizmor==${ZIZMOR_VERSION}" --offline --min-severity low .github/workflows
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            registry.npmjs.org:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Install (from the lockfile)
+        run: npm ci --ignore-scripts
+
+      - name: Tests
+        run: npm test
+
+      - name: Build, and check only the extension's own files are packaged
+        run: |
+          npm run build
+          files=$(unzip -Z1 web-ext-artifacts/*.zip | LC_ALL=C sort | tr '\n' ' ')
+          echo "packaged: $files"
+          [ "$files" = "LICENSE blockHdr.js icon.svg manifest.json " ] || { echo "::error::unexpected files in the package"; exit 1; }
+
+      - name: Versions match
+        run: |
+          m=$(node -p 'require("./manifest.json").version')
+          p=$(node -p 'require("./package.json").version')
+          [ "$m" = "$p" ] || { echo "::error::manifest.json ($m) and package.json ($p) versions differ"; exit 1; }

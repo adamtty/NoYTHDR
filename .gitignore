@@ -1,0 +1,9 @@
+node_modules/
+web-ext-artifacts/
+# written by `web-ext sign`: an ID for your AMO upload, not a key, but not for the repo
+.amo-upload-uuid
+# in case AMO credentials ever end up in a file
+.env
+.env.*
+.web-extrc*
+.DS_Store

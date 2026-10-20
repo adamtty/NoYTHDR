@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "name": "NoYTHDR",
+  "version": "1.0.0",
+  "description": "Stops YouTube from playing HDR video. YouTube serves the tone-mapped SDR version of the same stream instead.",
+  "icons": {
+    "48": "icon.svg",
+    "96": "icon.svg"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "noythdr@adam",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.youtube-nocookie.com/*"
+      ],
+      "js": ["blockHdr.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}
